@@ -128,5 +128,12 @@
 }
 
 GCDAsyncUdpSocket *udpSocket ; // create this first part as a global variable
+///starting the receiver code now
 
+-(IBAction)startStopButtonPressed:(id)sender{
+    if(isRunning){
+    
+        
+    }
+}
 @end

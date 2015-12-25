@@ -13,7 +13,12 @@
 {
     long tag;
     GCDAsyncUdpSocket *udpSocket;
+    
+    BOOL isRunning;
+    
+    
 }
+
 //sender properties ø
 @property (unsafe_unretained) IBOutlet NSWindow *window;
 @property IBOutlet NSTextField *addrField;
