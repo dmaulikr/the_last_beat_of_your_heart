@@ -1,139 +1,141 @@
-//
-//  AppDelegate.m
-//  UDP_Test
-//
-//  Created by Phoenix Perry on 12/24/15.
-//  Copyright © 2015 Phoenix Perry. All rights reserved.
-//
-
 #import "AppDelegate.h"
-#import "GCDAsyncUdpSocket.h"
 
-#define FORMAT(format, ...)[NSString stringWithFormat:(format), ##_VA_ARGS__]
+#define FORMAT(format, ...) [NSString stringWithFormat:(format), ##__VA_ARGS__]
 
-@interface AppDelegate ()
-@end
 
 @implementation AppDelegate
 
+@synthesize window = _window;
+@synthesize portField;
+@synthesize startStopButton;
+@synthesize logView;
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    
-    // Insert code here to initialize your application
-    
-    udpSocket = [[GCDAsyncUdpSocket alloc]initWithDelegate:self delegateQueue:dispatch_get_main_queue()];
-    
-    NSError *error = nil;
-    
-    if(![udpSocket bindToPort:0 error:&error])
-    {
-        NSString* str=(@"Error binding: %@", error);
-        [_logView insertText:str];
-        return;
-    }
-    if(![udpSocket beginReceiving:&error]){
-        [_logView insertText:(@"Error receiving: %@", error)];
-        return;
-    }
-    [_logView insertText:(@"Ready")];
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification
+{
+    udpSocket = [[AsyncUdpSocket alloc] initWithDelegate:self];
 }
--(void)scrollToBottom{
-    NSScrollView *scrollView = [_logView enclosingScrollView];
+
+- (void)awakeFromNib
+{
+    [logView setEnabledTextCheckingTypes:0];
+    [logView setAutomaticSpellingCorrectionEnabled:NO];
+}
+
+- (void)scrollToBottom
+{
+    NSScrollView *scrollView = [logView enclosingScrollView];
     NSPoint newScrollOrigin;
     
-    if([[scrollView documentView] isFlipped])
+    if ([[scrollView documentView] isFlipped])
         newScrollOrigin = NSMakePoint(0.0F, NSMaxY([[scrollView documentView] frame]));
     else
-        newScrollOrigin= NSMakePoint(0.0F, 0.0F); 
+        newScrollOrigin = NSMakePoint(0.0F, 0.0F);
+    
+    [[scrollView documentView] scrollPoint:newScrollOrigin];
 }
 
--(void)logError:(NSString*)msg{
-    NSString *paragraph = [NSString stringWithFormat:@"%@\n",msg];
+- (void)logError:(NSString *)msg
+{
+    NSString *paragraph = [NSString stringWithFormat:@"%@\n", msg];
     
     NSMutableDictionary *attributes = [NSMutableDictionary dictionaryWithCapacity:1];
-    
     [attributes setObject:[NSColor redColor] forKey:NSForegroundColorAttributeName];
     
-    NSAttributedString *as = [[NSAttributedString alloc]initWithString:paragraph attributes:attributes];
+    NSAttributedString *as = [[NSAttributedString alloc] initWithString:paragraph attributes:attributes];
     
-    [[_logView textStorage]appendAttributedString:as];
+    [[logView textStorage] appendAttributedString:as];
     [self scrollToBottom];
 }
--(void)logMessage:(NSString *)msg{
+
+- (void)logInfo:(NSString *)msg
+{
     NSString *paragraph = [NSString stringWithFormat:@"%@\n", msg];
+    
     NSMutableDictionary *attributes = [NSMutableDictionary dictionaryWithCapacity:1];
-    NSAttributedString *as = [[NSAttributedString alloc]initWithString:paragraph attributes:attributes];
-    [[_logView textStorage]appendAttributedString:as];
+    [attributes setObject:[NSColor purpleColor] forKey:NSForegroundColorAttributeName];
+    
+    NSAttributedString *as = [[NSAttributedString alloc] initWithString:paragraph attributes:attributes];
+    
+    [[logView textStorage] appendAttributedString:as];
     [self scrollToBottom];
 }
 
--(IBAction) send:(id)sender{
-    NSString *host = [_addrField stringValue];
-    if([host length]==0)
-    {
-        [self logError:@"Address Required"];
-        return;
-    }
-    int port = [_portField intValue];
-    if(port <=0 || port > 65535)
-    {
-        [self logError:@"Valid port required"];
-        return;
-    }
-    NSString *msg = [_messageField stringValue];
-    if([msg length]==0)
-    {
-        [self logError:@"Mesaage required"];
-        return;
-    }
-   
-    NSData *data = [msg dataUsingEncoding:NSUTF8StringEncoding];
-    [udpSocket sendData:data toHost:host port:port withTimeout:-1 tag:tag];
-    NSString *temp = [NSString stringWithFormat:@"SENT (%i): %@", (int)tag, msg];
-    [self logError:temp];
+- (void)logMessage:(NSString *)msg
+{
+    NSString *paragraph = [NSString stringWithFormat:@"%@\n", msg];
     
-    tag++;
+    NSMutableDictionary *attributes = [NSMutableDictionary dictionaryWithCapacity:1];
+    [attributes setObject:[NSColor blackColor] forKey:NSForegroundColorAttributeName];
+    
+    NSAttributedString *as = [[NSAttributedString alloc] initWithString:paragraph attributes:attributes];
+    
+    [[logView textStorage] appendAttributedString:as];
+    [self scrollToBottom];
 }
 
-- (void)udpSocket:(GCDAsyncUdpSocket *)sock didSendDataWithTag:(long)tag
+- (IBAction)startStopButtonPressed:(id)sender
 {
-    // You could add checks here
-}
-
-- (void)udpSocket:(GCDAsyncUdpSocket *)sock didNotSendDataWithTag:(long)tag dueToError:(NSError *)error
-{
-    // You could add checks here
-}
-
--(void)udpSocket:(GCDAsyncUdpSocket *)sock didReceiveData:(NSData *)data fromAddress:(NSData *)address withFilterContext:(id)filterContext
-{
-    NSString *msg = [[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
-    NSLog(msg); 
-    if(msg)
+    if (isRunning)
     {
-        NSString *temp =[NSString stringWithFormat:@"RECV: %@",msg];
-        [self logMessage:temp];
+        // STOP udp echo server
+        
+        [udpSocket close];
+        
+        [self logInfo:@"Stopped Udp Echo server"];
+        isRunning = false;
+        
+        [portField setEnabled:YES];
+        [startStopButton setTitle:@"Start"];
     }
     else
     {
-        NSString *host = nil;
-        uint16_t port = 0;
-        [GCDAsyncUdpSocket getHost:&host port:&port fromAddress:address];
-        NSString *temp =[NSString stringWithFormat:@"RECV: Unknown message from: %@:%hu",msg];
-        [self logMessage:temp];
-    }
-}
-- (void)applicationWillTerminate:(NSNotification *)aNotification {
-    // Insert code here to tear down your application
-}
-
-GCDAsyncUdpSocket *udpSocket ; // create this first part as a global variable
-///starting the receiver code now
-
--(IBAction)startStopButtonPressed:(id)sender{
-    if(isRunning){
-    
+        // START udp echo server
         
+        int port = [portField intValue];
+        if (port < 0 || port > 65535)
+        {
+            [portField setStringValue:@""];
+            port = 0;
+        }
+        
+        NSError *error = nil;
+        
+        if (![udpSocket bindToPort:port error:&error])
+        {
+            [self logError:FORMAT(@"Error starting server (bind): %@", error)];
+            return;
+        }
+        
+        [udpSocket receiveWithTimeout:-1 tag:0];
+        
+        [self logInfo:FORMAT(@"Udp Echo server started on port %hu", [udpSocket localPort])];
+        isRunning = YES;
+        
+        [portField setEnabled:NO];
+        [startStopButton setTitle:@"Stop"];
     }
 }
+
+- (BOOL)onUdpSocket:(AsyncUdpSocket *)sock
+     didReceiveData:(NSData *)data
+            withTag:(long)tag
+           fromHost:(NSString *)host
+               port:(UInt16)port
+{
+    NSString *msg = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (msg)
+    {
+        [self logMessage:msg];
+    }
+    else
+    {
+        [self logError:@"Error converting received data into UTF-8 String"];
+    }
+    //this is def the echo - change this for heartbeat.
+    [udpSocket sendData:data toHost:host port:port withTimeout:-1 tag:0];
+    [udpSocket receiveWithTimeout:-1 tag:0];
+    
+    return YES;
+}
+
 @end
